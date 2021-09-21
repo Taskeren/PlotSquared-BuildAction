@@ -106,7 +106,7 @@ public class Rate extends SubCommand {
                         if ((!Settings.Done.REQUIRED_FOR_RATINGS || DoneFlag.isDone(p)) && p
                                 .isBasePlot() && (!p.getRatings().containsKey(uuid)) && !p
                                 .isAdded(uuid)) {
-                            p.teleportPlayer(player, TeleportCause.COMMAND, result -> {
+                            p.teleportPlayer(player, TeleportCause.COMMAND_RATE, result -> {
                             });
                             player.sendMessage(TranslatableCaption.of("tutorial.rate_this"));
                             return true;
@@ -287,8 +287,8 @@ public class Rate extends SubCommand {
                 completions.add("purge");
             }
             final List<Command> commands = completions.stream().filter(completion -> completion
-                    .toLowerCase()
-                    .startsWith(args[0].toLowerCase()))
+                            .toLowerCase()
+                            .startsWith(args[0].toLowerCase()))
                     .map(completion -> new Command(null, true, completion, "", RequiredType.PLAYER, CommandCategory.INFO) {
                     }).collect(Collectors.toCollection(LinkedList::new));
             if (Permissions.hasPermission(player, Permission.PERMISSION_RATE) && args[0].length() > 0) {

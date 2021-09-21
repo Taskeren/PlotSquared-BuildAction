@@ -31,8 +31,8 @@ dependencies {
         exclude(group = "dummypermscompat")
     }
     testImplementation(libs.worldeditCore)
-    compileOnlyApi(libs.fastasyncworldeditBukkit)
-    testImplementation(libs.fastasyncworldeditBukkit)
+    compileOnlyApi(libs.fastasyncworldeditCore) { isTransitive = false }
+    testImplementation(libs.fastasyncworldeditCore) { isTransitive = false }
 
     // Logging
     compileOnlyApi(libs.log4j)

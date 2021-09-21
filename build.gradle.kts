@@ -6,21 +6,27 @@ plugins {
     java
     `java-library`
     `maven-publish`
-    id("com.github.johnrengelman.shadow") version "7.0.0"
-    id("org.cadixdev.licenser") version "0.6.1"
-    id("org.ajoberstar.grgit") version "4.1.0"
+    signing
+
+    alias(libs.plugins.shadow)
+    alias(libs.plugins.licenser)
+    alias(libs.plugins.grgit)
 
     eclipse
     idea
 }
 
-var ver by extra("6.0.7")
+var ver by extra("6.1.3")
 var versuffix by extra("-SNAPSHOT")
 val versionsuffix: String? by project
 if (versionsuffix != null) {
     versuffix = "-$versionsuffix"
 }
-version = ver + versuffix
+version = if (!project.hasProperty("release")) {
+    ver + versuffix
+} else {
+    ver
+}
 
 allprojects {
     group = "com.plotsquared"
@@ -58,21 +64,10 @@ subprojects {
         plugin<MavenPublishPlugin>()
         plugin<ShadowPlugin>()
         plugin<Licenser>()
+        plugin<SigningPlugin>()
 
         plugin<EclipsePlugin>()
         plugin<IdeaPlugin>()
-    }
-
-    tasks {
-        // This is to create the target dir under the root project with all jars.
-        val assembleTargetDir = create<Copy>("assembleTargetDirectory") {
-            destinationDir = rootDir.resolve("target")
-            into(destinationDir)
-            from(withType<Jar>())
-        }
-        named("build") {
-            dependsOn(assembleTargetDir)
-        }
     }
 }
 
@@ -81,12 +76,12 @@ allprojects {
     dependencies {
         // Tests
         testImplementation("junit:junit:4.13.2")
+        testImplementation("org.junit.jupiter:junit-jupiter:5.8.0")
     }
 
     plugins.withId("java") {
         the<JavaPluginExtension>().toolchain {
             languageVersion.set(JavaLanguageVersion.of(16))
-            vendor.set(JvmVendorSpec.ADOPTOPENJDK)
         }
     }
 
@@ -101,6 +96,18 @@ allprojects {
         withJavadocJar()
     }
 
+    val javaComponent = components["java"] as AdhocComponentWithVariants
+    javaComponent.withVariantsFromConfiguration(configurations["shadowRuntimeElements"]) {
+        skip()
+    }
+
+    signing {
+        if (!version.toString().endsWith("-SNAPSHOT")) {
+            signing.isRequired
+            sign(publishing.publications)
+        }
+    }
+
     publishing {
         publications {
             create<MavenPublication>("maven") {
@@ -109,6 +116,11 @@ allprojects {
                 from(components["java"])
 
                 pom {
+
+                    name.set(project.name + " " + project.version)
+                    description.set("PlotSquared is a land and world management plugin for Minecraft.")
+                    url.set("https://github.com/IntellectualSites/PlotSquared")
+
                     licenses {
                         license {
                             name.set("GNU General Public License, Version 3.0")
@@ -141,6 +153,11 @@ allprojects {
                         connection.set("scm:https://IntellectualSites@github.com/IntellectualSites/PlotSquared.git")
                         developerConnection.set("scm:git://github.com/IntellectualSites/PlotSquared.git")
                     }
+
+                    issueManagement{
+                        system.set("GitHub")
+                        url.set("https://github.com/IntellectualSites/PlotSquared/issues")
+                    }
                 }
             }
         }
@@ -156,11 +173,11 @@ allprojects {
             val nexusPassword: String? by project
             if (nexusUsername != null && nexusPassword != null) {
                 maven {
-                    val repositoryUrl = "https://mvn.intellectualsites.com/content/repositories/releases/"
-                    val snapshotRepositoryUrl = "https://mvn.intellectualsites.com/content/repositories/snapshots/"
+                    val releasesRepositoryUrl = "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
+                    val snapshotRepositoryUrl = "https://s01.oss.sonatype.org/content/repositories/snapshots/"
                     url = uri(
                             if (version.toString().endsWith("-SNAPSHOT")) snapshotRepositoryUrl
-                            else repositoryUrl
+                            else releasesRepositoryUrl
                     )
 
                     credentials {
@@ -177,7 +194,6 @@ allprojects {
     tasks {
         named<Delete>("clean") {
             doFirst {
-                rootDir.resolve("target").deleteRecursively()
                 javadocDir.deleteRecursively()
             }
         }
@@ -199,7 +215,6 @@ allprojects {
                     "implSpec:a:Implementation Requirements:",
                     "implNote:a:Implementation Note:"
             )
-            opt.destinationDirectory = javadocDir
         }
 
         jar {
@@ -215,7 +230,11 @@ allprojects {
         named("build") {
             dependsOn(named("shadowJar"))
         }
+        test {
+            useJUnitPlatform()
+        }
     }
+
 }
 
 tasks {

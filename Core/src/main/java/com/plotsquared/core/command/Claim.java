@@ -46,9 +46,9 @@ import com.plotsquared.core.util.Permissions;
 import com.plotsquared.core.util.PlotExpression;
 import com.plotsquared.core.util.task.TaskManager;
 import net.kyori.adventure.text.minimessage.Template;
-import org.checkerframework.checker.nullness.qual.NonNull;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 @CommandDeclaration(
         command = "claim",
@@ -151,7 +151,7 @@ public class Claim extends SubCommand {
                 double cost = costExr.evaluate(currentPlots);
                 if (cost > 0d) {
                     if (!this.econHandler.isSupported()) {
-                        player.sendMessage(TranslatableCaption.of("economy.vault_not_found"));
+                        player.sendMessage(TranslatableCaption.of("economy.vault_or_consumer_null"));
                         return false;
                     }
                     if (this.econHandler.getMoney(player) < cost) {
@@ -193,7 +193,7 @@ public class Claim extends SubCommand {
         DBFunc.createPlotSafe(plot, () -> {
             try {
                 TaskManager.getPlatformImplementation().sync(() -> {
-                    if (!plot.claim(player, true, finalSchematic, false)) {
+                    if (!plot.claim(player, true, finalSchematic, false, false)) {
                         LOGGER.info("Failed to claim plot {}", plot.getId().toCommaSeparatedString());
                         player.sendMessage(TranslatableCaption.of("working.plot_not_claimed"));
                         plot.setOwnerAbs(null);

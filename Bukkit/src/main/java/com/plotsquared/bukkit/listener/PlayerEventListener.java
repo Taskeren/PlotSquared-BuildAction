@@ -701,8 +701,10 @@ public class PlayerEventListener extends PlotListener implements Listener {
         String message = event.getMessage();
         String sender = event.getPlayer().getDisplayName();
         PlotId id = plot.getId();
+        String worldName = plot.getWorldName();
         Caption msg = TranslatableCaption.of("chat.plot_chat_format");
         Template msgTemplate;
+        Template worldNameTemplate = Template.of("world", worldName);
         Template plotTemplate = Template.of("plot_id", id.toString());
         Template senderTemplate = Template.of("sender", sender);
         // If we do/don't want colour, we need to be careful about how to go about it, as players could attempt either <gold></gold> or &6 etc.
@@ -711,7 +713,8 @@ public class PlayerEventListener extends PlotListener implements Listener {
         //  allowing colour.
         if (plotPlayer.hasPermission("plots.chat.color")) {
             msgTemplate = Template
-                    .of("msg",
+                    .of(
+                            "msg",
                             BukkitUtil.LEGACY_COMPONENT_SERIALIZER.deserialize(ChatColor.translateAlternateColorCodes(
                                     '&',
                                     message
@@ -722,7 +725,7 @@ public class PlayerEventListener extends PlotListener implements Listener {
                     ChatColor.stripColor(BukkitUtil.LEGACY_COMPONENT_SERIALIZER.serialize(Component.text(message)))));
         }
         for (PlotPlayer<?> receiver : plotRecipients) {
-            receiver.sendMessage(msg, msgTemplate, plotTemplate, senderTemplate);
+            receiver.sendMessage(msg, worldNameTemplate, msgTemplate, plotTemplate, senderTemplate);
         }
         if (!spies.isEmpty()) {
             Caption spymsg = TranslatableCaption.of("chat.plot_chat_spy_format");
@@ -730,7 +733,7 @@ public class PlayerEventListener extends PlotListener implements Listener {
             Template spysenderTemplate = Template.of("sender", sender);
             Template spymessageTemplate = Template.of("msg", Component.text(message));
             for (PlotPlayer<?> player : spies) {
-                player.sendMessage(spymsg, plotidTemplate, spysenderTemplate, spymessageTemplate);
+                player.sendMessage(spymsg, worldNameTemplate, plotidTemplate, spysenderTemplate, spymessageTemplate);
             }
         }
         if (Settings.Chat.LOG_PLOTCHAT_TO_CONSOLE) {
@@ -738,7 +741,9 @@ public class PlayerEventListener extends PlotListener implements Listener {
             Template plotidTemplate = Template.of("plot_id", id.getX() + ";" + id.getY());
             Template spysenderTemplate = Template.of("sender", sender);
             Template spymessageTemplate = Template.of("msg", Component.text(message));
-            ConsolePlayer.getConsole().sendMessage(spymsg, plotidTemplate, spysenderTemplate, spymessageTemplate);
+            ConsolePlayer.getConsole().sendMessage(spymsg, worldNameTemplate, plotidTemplate, spysenderTemplate,
+                    spymessageTemplate
+            );
         }
     }
 
@@ -1116,7 +1121,9 @@ public class PlayerEventListener extends PlotListener implements Listener {
 
                 // todo: when the code above is rearranged, it would be great to beautify this as well.
                 // will code this as a temporary, specific bug fix (for dragon eggs)
-                if (blockType != Material.DRAGON_EGG) return;
+                if (blockType != Material.DRAGON_EGG) {
+                    return;
+                }
 
                 eventType = PlayerBlockEventType.INTERACT_BLOCK;
                 blocktype1 = BukkitAdapter.asBlockType(block.getType());
@@ -1167,10 +1174,15 @@ public class PlayerEventListener extends PlotListener implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onBucketEmpty(PlayerBucketEmptyEvent event) {
         BlockFace bf = event.getBlockFace();
+        // Note: a month after Bukkit 1.14.4 released, they added the API method
+        // PlayerBucketEmptyEvent#getBlock(), which returns the block the
+        // bucket contents is going to be placed at. Currently we determine this
+        // block ourselves to retain compatibility with 1.13.
         final Block block;
         // if the block can be waterlogged, the event might waterlog the block
         // sometimes
-        if (event.getBlockClicked().getBlockData() instanceof Waterlogged) {
+        if (event.getBlockClicked().getBlockData() instanceof Waterlogged waterlogged
+                && !waterlogged.isWaterlogged() && event.getBucket() != Material.LAVA_BUCKET) {
             block = event.getBlockClicked();
         } else {
             block = event.getBlockClicked().getLocation()
@@ -1439,6 +1451,9 @@ public class PlayerEventListener extends PlotListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPlayerInteractEntity(PlayerInteractEntityEvent event) {
+        if (event.getRightClicked().getType() == EntityType.UNKNOWN) {
+            return;
+        }
         Location location = BukkitUtil.adapt(event.getRightClicked().getLocation());
         PlotArea area = location.getPlotArea();
         if (area == null) {

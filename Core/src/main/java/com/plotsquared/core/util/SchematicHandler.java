@@ -71,10 +71,10 @@ import com.sk89q.worldedit.world.World;
 import com.sk89q.worldedit.world.biome.BiomeType;
 import com.sk89q.worldedit.world.block.BaseBlock;
 import com.sk89q.worldedit.world.block.BlockTypes;
-import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -526,7 +526,7 @@ public abstract class SchematicHandler {
             TaskManager.runTask(whenDone);
             return;
         }
-        upload(uuid, file, "schem", new RunnableVal<OutputStream>() {
+        upload(uuid, file, "schem", new RunnableVal<>() {
             @Override
             public void run(OutputStream output) {
                 try (NBTOutputStream nos = new NBTOutputStream(new GZIPOutputStream(output, true))) {

@@ -80,23 +80,12 @@ public class Visit extends Command {
         // then we get it another time further on
         final List<Plot> unsorted = query.asList();
 
-        if (unsorted.isEmpty()) {
-            player.sendMessage(TranslatableCaption.of("invalid.found_no_plots"));
-            return;
-        }
-
         if (unsorted.size() > 1) {
             query.whereBasePlot();
         }
 
         if (page == Integer.MIN_VALUE) {
             page = 1;
-        }
-
-        if (page < 1 || page > unsorted.size()) {
-            // TODO: Huh?
-            // MainUtil.sendMessage(player, String.format("(1, %d)", unsorted.size()));
-            return;
         }
 
         PlotArea relativeArea = sortByArea;
@@ -111,6 +100,18 @@ public class Visit extends Command {
         }
 
         final List<Plot> plots = query.asList();
+
+        if (plots.isEmpty()) {
+            player.sendMessage(TranslatableCaption.of("invalid.found_no_plots"));
+            return;
+        } else if (plots.size() < page || page < 1) {
+            player.sendMessage(
+                    TranslatableCaption.of("invalid.number_not_in_range"),
+                    Template.of("min", "1"),
+                    Template.of("max", String.valueOf(plots.size()))
+            );
+            return;
+        }
 
         final Plot plot = plots.get(page - 1);
         if (!plot.hasOwner()) {
@@ -165,7 +166,7 @@ public class Visit extends Command {
             }
         }
 
-        confirm.run(this, () -> plot.teleportPlayer(player, TeleportCause.COMMAND, result -> {
+        confirm.run(this, () -> plot.teleportPlayer(player, TeleportCause.COMMAND_VISIT, result -> {
             if (result) {
                 whenDone.run(Visit.this, CommandResult.SUCCESS);
             } else {
@@ -181,6 +182,11 @@ public class Visit extends Command {
             final RunnableVal3<Command, Runnable, Runnable> confirm,
             final RunnableVal2<Command, CommandResult> whenDone
     ) throws CommandException {
+        if (args.length > 3) {
+            sendUsage(player);
+            return CompletableFuture.completedFuture(false);
+        }
+
         if (args.length == 1 && args[0].contains(":")) {
             args = args[0].split(":");
         }
@@ -233,9 +239,15 @@ public class Visit extends Command {
                             );
                         } else {
                             final UUID uuid = uuids.toArray(new UUID[0])[0];
+                            PlotQuery query = PlotQuery.newQuery();
+                            if (Settings.Teleport.VISIT_MERGED_OWNERS) {
+                                query.ownersInclude(uuid);
+                            } else {
+                                query.whereBasePlot().ownedBy(uuid);
+                            }
                             this.visit(
                                     player,
-                                    PlotQuery.newQuery().ownedBy(uuid).whereBasePlot(),
+                                    query,
                                     finalSortByArea,
                                     confirm,
                                     whenDone,

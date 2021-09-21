@@ -1,5 +1,15 @@
 {
   "extends": [
-    "config:base"
+    "config:base",
+    ":disableDependencyDashboard"
+  ],
+  "ignoreDeps": [
+    "guava",
+    "gson",
+    "snakeyaml"
+  ],
+  "timezone": "Europe/Berlin",
+  "schedule": [
+    "on monday after 9am"
   ]
 }

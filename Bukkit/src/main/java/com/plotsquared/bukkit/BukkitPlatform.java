@@ -102,7 +102,6 @@ import com.plotsquared.core.plot.world.SinglePlotArea;
 import com.plotsquared.core.plot.world.SinglePlotAreaManager;
 import com.plotsquared.core.setup.PlotAreaBuilder;
 import com.plotsquared.core.setup.SettingsNodesWrapper;
-import com.plotsquared.core.util.EconHandler;
 import com.plotsquared.core.util.EventDispatcher;
 import com.plotsquared.core.util.FileUtils;
 import com.plotsquared.core.util.PlatformWorldManager;
@@ -121,6 +120,8 @@ import io.papermc.lib.PaperLib;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.bstats.bukkit.Metrics;
 import org.bstats.charts.DrilldownPie;
 import org.bstats.charts.SimplePie;
@@ -141,8 +142,6 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.incendo.serverlib.ServerLib;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.io.File;
 import java.lang.reflect.Method;
@@ -188,7 +187,6 @@ public final class BukkitPlatform extends JavaPlugin implements Listener, PlotPl
     private boolean methodUnloadSetup = false;
     private boolean metricsStarted;
     private boolean faweHook = false;
-    private EconHandler econ;
 
     private Injector injector;
 
@@ -276,7 +274,8 @@ public final class BukkitPlatform extends JavaPlugin implements Listener, PlotPl
         // We create the injector after PlotSquared has been initialized, so that we have access
         // to generated instances and settings
         this.injector = Guice
-                .createInjector(Stage.PRODUCTION,
+                .createInjector(
+                        Stage.PRODUCTION,
                         new PermissionModule(),
                         new WorldManagerModule(),
                         new PlotSquaredModule(),
@@ -375,14 +374,6 @@ public final class BukkitPlatform extends JavaPlugin implements Listener, PlotPl
         // Permissions
         this.permissionHandler().initialize();
 
-        // Economy
-        if (Settings.Enabled_Components.ECONOMY) {
-            TaskManager.runTaskAsync(() -> {
-                final EconHandler econHandler = injector().getInstance(EconHandler.class);
-                econHandler.init();
-            });
-        }
-
         if (Settings.Enabled_Components.COMPONENT_PRESETS) {
             try {
                 injector().getInstance(ComponentPresetManager.class);
@@ -427,6 +418,9 @@ public final class BukkitPlatform extends JavaPlugin implements Listener, PlotPl
                 }
             }, TaskTime.ticks(1L));
         }
+
+        // Once the server has loaded force updating all generators known to P2
+        TaskManager.runTaskLater(() -> PlotSquared.platform().setupUtils().updateGenerators(true), TaskTime.ticks(1L));
 
         // Services are accessed in order
         final CacheUUIDService cacheUUIDService = new CacheUUIDService(Settings.UUID.UUID_CACHE_SIZE);
@@ -863,7 +857,7 @@ public final class BukkitPlatform extends JavaPlugin implements Listener, PlotPl
                                         if (area != null) {
                                             PlotId currentPlotId = area.getPlotAbs(pLoc).getId();
                                             if (!originalPlotId.equals(currentPlotId) && (currentPlotId == null || !area.getPlot(
-                                                    originalPlotId)
+                                                            originalPlotId)
                                                     .equals(area.getPlot(currentPlotId)))) {
                                                 if (entity.hasMetadata("ps-tmp-teleport")) {
                                                     continue;
@@ -1001,10 +995,11 @@ public final class BukkitPlatform extends JavaPlugin implements Listener, PlotPl
     }
 
     @Override
-    public @Nullable final ChunkGenerator getDefaultWorldGenerator(
+    public @Nullable
+    final ChunkGenerator getDefaultWorldGenerator(
             final @NonNull String worldName,
-            final @Nullable String id)
-    {
+            final @Nullable String id
+    ) {
         final IndependentPlotGenerator result;
         if (id != null && id.equalsIgnoreCase("single")) {
             result = injector().getInstance(SingleWorldGenerator.class);
@@ -1033,7 +1028,8 @@ public final class BukkitPlatform extends JavaPlugin implements Listener, PlotPl
             }
             return new BukkitPlotGenerator(world, gen, this.plotAreaManager);
         } else {
-            return new BukkitPlotGenerator(world,
+            return new BukkitPlotGenerator(
+                    world,
                     injector().getInstance(Key.get(IndependentPlotGenerator.class, DefaultGenerator.class)),
                     this.plotAreaManager
             );
@@ -1098,11 +1094,11 @@ public final class BukkitPlatform extends JavaPlugin implements Listener, PlotPl
             String manager = worldConfig.getString("generator.plugin", pluginName());
             PlotAreaBuilder builder =
                     PlotAreaBuilder.newBuilder().plotManager(manager).generatorName(worldConfig.getString(
-                            "generator.init",
-                            manager
-                    ))
+                                    "generator.init",
+                                    manager
+                            ))
                             .plotAreaType(ConfigurationUtil.getType(worldConfig)).terrainType(ConfigurationUtil.getTerrain(
-                            worldConfig))
+                                    worldConfig))
                             .settingsNodesWrapper(new SettingsNodesWrapper(new ConfigurationNode[0], null)).worldName(worldName);
             injector().getInstance(SetupUtils.class).setupWorld(builder);
             world = Bukkit.getWorld(worldName);

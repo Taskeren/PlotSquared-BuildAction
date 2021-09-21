@@ -83,7 +83,7 @@ public class Grant extends Command {
                     );
                     return CompletableFuture.completedFuture(false);
                 }
-                if (args.length > 2) {
+                if (args.length != 2) {
                     break;
                 }
                 PlayerManager.getUUIDsFromString(args[1], (uuids, throwable) -> {
@@ -164,8 +164,8 @@ public class Grant extends Command {
                 completions.add("check");
             }
             final List<Command> commands = completions.stream().filter(completion -> completion
-                    .toLowerCase()
-                    .startsWith(args[0].toLowerCase()))
+                            .toLowerCase()
+                            .startsWith(args[0].toLowerCase()))
                     .map(completion -> new Command(
                             null,
                             true,
