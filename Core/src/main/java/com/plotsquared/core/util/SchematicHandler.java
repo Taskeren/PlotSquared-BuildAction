@@ -8,7 +8,7 @@
  *                                    | |
  *                                    |_|
  *            PlotSquared plot management system for Minecraft
- *                  Copyright (C) 2021 IntellectualSites
+ *               Copyright (C) 2014 - 2022 IntellectualSites
  *
  *     This program is free software: you can redistribute it and/or modify
  *     it under the terms of the GNU General Public License as published by
@@ -580,6 +580,10 @@ public abstract class SchematicHandler {
         schematic.put("Palette", new CompoundTag(paletteTag));
         schematic.put("BlockData", new ByteArrayTag(buffer.toByteArray()));
         schematic.put("BlockEntities", new ListTag(CompoundTag.class, tileEntities));
+
+        if (biomeBuffer.size() == 0 || biomePalette.size() == 0) {
+            return;
+        }
 
         schematic.put("BiomePaletteMax", new IntTag(biomePalette.size()));
 

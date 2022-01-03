@@ -8,7 +8,7 @@
  *                                    | |
  *                                    |_|
  *            PlotSquared plot management system for Minecraft
- *                  Copyright (C) 2021 IntellectualSites
+ *               Copyright (C) 2014 - 2022 IntellectualSites
  *
  *     This program is free software: you can redistribute it and/or modify
  *     it under the terms of the GNU General Public License as published by
@@ -426,8 +426,11 @@ public class ExpireManager {
                     .callUnlink(plot.getArea(), plot, true, false,
                             PlotUnlinkEvent.REASON.EXPIRE_DELETE
                     );
-            if (event.getEventResult() != Result.DENY) {
-                plot.getPlotModificationManager().unlinkPlot(event.isCreateRoad(), event.isCreateSign());
+            if (event.getEventResult() != Result.DENY && plot.getPlotModificationManager().unlinkPlot(
+                    event.isCreateRoad(),
+                    event.isCreateSign()
+            )) {
+                this.eventDispatcher.callPostUnlink(plot, PlotUnlinkEvent.REASON.EXPIRE_DELETE);
             }
         }
         for (UUID helper : plot.getTrusted()) {

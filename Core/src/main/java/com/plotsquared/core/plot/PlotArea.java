@@ -8,7 +8,7 @@
  *                                    | |
  *                                    |_|
  *            PlotSquared plot management system for Minecraft
- *                  Copyright (C) 2021 IntellectualSites
+ *               Copyright (C) 2014 - 2022 IntellectualSites
  *
  *     This program is free software: you can redistribute it and/or modify
  *     it under the terms of the GNU General Public License as published by
@@ -41,6 +41,7 @@ import com.plotsquared.core.configuration.file.YamlConfiguration;
 import com.plotsquared.core.generator.GridPlotWorld;
 import com.plotsquared.core.generator.IndependentPlotGenerator;
 import com.plotsquared.core.inject.annotations.WorldConfig;
+import com.plotsquared.core.location.BlockLoc;
 import com.plotsquared.core.location.Direction;
 import com.plotsquared.core.location.Location;
 import com.plotsquared.core.location.PlotLoc;
@@ -123,6 +124,7 @@ public abstract class PlotArea {
             new FlagContainer(GlobalFlagContainer.getInstance());
     private final YamlConfiguration worldConfiguration;
     private final GlobalBlockQueue globalBlockQueue;
+    private final boolean roadFlags = false;
     private boolean autoMerge = false;
     private boolean allowSigns = true;
     private boolean miscSpawnUnowned = false;
@@ -140,14 +142,13 @@ public abstract class PlotArea {
     private PlotAreaType type = PlotAreaType.NORMAL;
     private PlotAreaTerrainType terrain = PlotAreaTerrainType.NONE;
     private boolean homeAllowNonmember = false;
-    private PlotLoc nonmemberHome;
-    private PlotLoc defaultHome;
+    private BlockLoc nonmemberHome;
+    private BlockLoc defaultHome;
     private int maxBuildHeight = 256;
     private int minBuildHeight = 1;
     private GameMode gameMode = GameModes.CREATIVE;
     private Map<String, PlotExpression> prices = new HashMap<>();
     private List<String> schematics = new ArrayList<>();
-    private final boolean roadFlags = false;
     private boolean worldBorder = false;
     private boolean useEconomy = false;
     private int hash;
@@ -370,24 +371,24 @@ public abstract class PlotArea {
 
         String homeNonMembers = config.getString("home.nonmembers");
         String homeDefault = config.getString("home.default");
-        this.defaultHome = PlotLoc.fromString(homeDefault);
+        this.defaultHome = BlockLoc.fromString(homeDefault);
         this.homeAllowNonmember = homeNonMembers.equalsIgnoreCase(homeDefault);
         if (this.homeAllowNonmember) {
             this.nonmemberHome = defaultHome;
         } else {
-            this.nonmemberHome = PlotLoc.fromString(homeNonMembers);
+            this.nonmemberHome = BlockLoc.fromString(homeNonMembers);
         }
 
         if ("side".equalsIgnoreCase(homeDefault)) {
             this.defaultHome = null;
-        } else if (StringMan.isEqualIgnoreCaseToAny(homeDefault, "center", "middle")) {
-            this.defaultHome = new PlotLoc(Integer.MAX_VALUE, Integer.MAX_VALUE);
+        } else if (StringMan.isEqualIgnoreCaseToAny(homeDefault, "center", "middle", "centre")) {
+            this.defaultHome = new BlockLoc(Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE);
         } else {
             try {
                 /*String[] split = homeDefault.split(",");
                 this.DEFAULT_HOME =
                     new PlotLoc(Integer.parseInt(split[0]), Integer.parseInt(split[1]));*/
-                this.defaultHome = PlotLoc.fromString(homeDefault);
+                this.defaultHome = BlockLoc.fromString(homeDefault);
             } catch (NumberFormatException ignored) {
                 this.defaultHome = null;
             }
@@ -408,13 +409,9 @@ public abstract class PlotArea {
             }
         }
         this.getFlagContainer().addAll(parseFlags(flags));
-
-        Component flagsComponent = null;
-        Collection<PlotFlag<?, ?>> flagCollection = this.getFlagContainer().getFlagMap().values();
-        flagsComponent = getFlagsComponent(flagsComponent, flagCollection);
         ConsolePlayer.getConsole().sendMessage(
                 TranslatableCaption.of("flags.area_flags"),
-                Template.of("flags", flagsComponent)
+                Template.of("flags", flags.toString())
         );
 
         this.spawnEggs = config.getBoolean("event.spawn.egg");
@@ -433,13 +430,9 @@ public abstract class PlotArea {
             }
         }
         this.getRoadFlagContainer().addAll(parseFlags(roadflags));
-
-        Component roadFlagsComponent = null;
-        Collection<PlotFlag<?, ?>> roadFlagCollection = this.getRoadFlagContainer().getFlagMap().values();
-        roadFlagsComponent = getFlagsComponent(roadFlagsComponent, roadFlagCollection);
         ConsolePlayer.getConsole().sendMessage(
                 TranslatableCaption.of("flags.road_flags"),
-                Template.of("flags", roadFlagsComponent)
+                Template.of("flags", roadflags.toString())
         );
 
         loadConfiguration(config);
@@ -1359,15 +1352,38 @@ public abstract class PlotArea {
         return this.homeAllowNonmember;
     }
 
-    public PlotLoc getNonmemberHome() {
+    /**
+     * Get the location for non-members to be teleported to.
+     */
+    public BlockLoc nonmemberHome() {
         return this.nonmemberHome;
     }
 
-    public PlotLoc getDefaultHome() {
+    /**
+     * Get the default location for players to be teleported to. May be overriden by {@link #nonmemberHome} if the player is
+     * not a member of the plot.
+     */
+    public BlockLoc defaultHome() {
         return this.defaultHome;
     }
 
-    protected void setDefaultHome(PlotLoc defaultHome) {
+    /**
+     * @deprecated Use {@link #nonmemberHome}
+     */
+    @Deprecated(forRemoval = true)
+    public PlotLoc getNonmemberHome() {
+        return new PlotLoc(this.defaultHome.getX(), this.defaultHome.getY(), this.defaultHome.getZ());
+    }
+
+    /**
+     * @deprecated Use {@link #defaultHome}
+     */
+    @Deprecated(forRemoval = true)
+    public PlotLoc getDefaultHome() {
+        return new PlotLoc(this.defaultHome.getX(), this.defaultHome.getY(), this.defaultHome.getZ());
+    }
+
+    protected void setDefaultHome(BlockLoc defaultHome) {
         this.defaultHome = defaultHome;
     }
 

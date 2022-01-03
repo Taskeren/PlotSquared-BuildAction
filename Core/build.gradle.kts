@@ -5,8 +5,8 @@ dependencies {
     compileOnlyApi(libs.checkerqual)
 
     // Minecraft expectations
-    compileOnlyApi(libs.guava)
     compileOnlyApi(libs.gson)
+    compileOnly(libs.guava)
 
     // Platform expectations
     compileOnlyApi(libs.snakeyaml)
@@ -22,16 +22,16 @@ dependencies {
     api(libs.guiceassistedinject) {
         exclude("com.google.inject", "guice")
     }
-    compileOnlyApi(libs.findbugs)
+    api(libs.findbugs)
 
     // Plugins
-    compileOnlyApi(libs.worldeditCore) {
+    compileOnly(libs.worldeditCore) {
         exclude(group = "bukkit-classloader-check")
         exclude(group = "mockito-core")
         exclude(group = "dummypermscompat")
     }
     testImplementation(libs.worldeditCore)
-    compileOnlyApi(libs.fastasyncworldeditCore) { isTransitive = false }
+    compileOnly(libs.fastasyncworldeditCore) { isTransitive = false }
     testImplementation(libs.fastasyncworldeditCore) { isTransitive = false }
 
     // Logging
@@ -40,9 +40,7 @@ dependencies {
     // Other libraries
     api(libs.prtree)
     api(libs.aopalliance)
-    api(libs.pipeline) {
-        exclude(group = "com.google.guava")
-    }
+    api(libs.cloudServices)
     api(libs.arkitektonika)
     api(libs.paster)
 }

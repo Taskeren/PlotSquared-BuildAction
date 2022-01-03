@@ -8,7 +8,7 @@
  *                                    | |
  *                                    |_|
  *            PlotSquared plot management system for Minecraft
- *                  Copyright (C) 2021 IntellectualSites
+ *               Copyright (C) 2014 - 2022 IntellectualSites
  *
  *     This program is free software: you can redistribute it and/or modify
  *     it under the terms of the GNU General Public License as published by
@@ -39,12 +39,11 @@ import com.plotsquared.core.configuration.caption.TranslatableCaption;
 import com.plotsquared.core.database.DBFunc;
 import com.plotsquared.core.events.Result;
 import com.plotsquared.core.events.TeleportCause;
-import com.plotsquared.core.generator.HybridPlotWorld;
+import com.plotsquared.core.generator.ClassicPlotWorld;
 import com.plotsquared.core.listener.PlotListener;
 import com.plotsquared.core.location.BlockLoc;
 import com.plotsquared.core.location.Direction;
 import com.plotsquared.core.location.Location;
-import com.plotsquared.core.location.PlotLoc;
 import com.plotsquared.core.permissions.Permission;
 import com.plotsquared.core.player.ConsolePlayer;
 import com.plotsquared.core.player.PlotPlayer;
@@ -59,6 +58,7 @@ import com.plotsquared.core.plot.flag.implementations.KeepFlag;
 import com.plotsquared.core.plot.flag.implementations.ServerPlotFlag;
 import com.plotsquared.core.plot.flag.types.DoubleFlag;
 import com.plotsquared.core.plot.schematic.Schematic;
+import com.plotsquared.core.plot.world.SinglePlotArea;
 import com.plotsquared.core.queue.QueueCoordinator;
 import com.plotsquared.core.util.EventDispatcher;
 import com.plotsquared.core.util.MathMan;
@@ -368,7 +368,7 @@ public class Plot {
             for (Plot p : plots) {
                 String name = p.getAlias();
                 if (!name.isEmpty() && name.equalsIgnoreCase(arg)) {
-                    return p;
+                    return p.getBasePlot(false);
                 }
             }
             if (message && player != null) {
@@ -1329,7 +1329,7 @@ public class Plot {
             return Location.at(
                     "",
                     0,
-                    this.getArea() instanceof HybridPlotWorld ? ((HybridPlotWorld) this.getArea()).PLOT_HEIGHT + 1 : 4,
+                    this.getArea() instanceof ClassicPlotWorld ? ((ClassicPlotWorld) this.getArea()).PLOT_HEIGHT + 1 : 4,
                     0
             );
         }
@@ -1404,7 +1404,7 @@ public class Plot {
                 return Location.at(
                         "",
                         0,
-                        this.getArea() instanceof HybridPlotWorld ? ((HybridPlotWorld) this.getArea()).PLOT_HEIGHT + 1 : 4,
+                        this.getArea() instanceof ClassicPlotWorld ? ((ClassicPlotWorld) this.getArea()).PLOT_HEIGHT + 1 : 4,
                         0
                 );
             }
@@ -1443,7 +1443,7 @@ public class Plot {
                 result.accept(Location.at(
                         "",
                         0,
-                        this.getArea() instanceof HybridPlotWorld ? ((HybridPlotWorld) this.getArea()).PLOT_HEIGHT + 1 : 4,
+                        this.getArea() instanceof ClassicPlotWorld ? ((ClassicPlotWorld) this.getArea()).PLOT_HEIGHT + 1 : 4,
                         0
                 ));
                 return;
@@ -1477,7 +1477,7 @@ public class Plot {
      */
     public void setHome(BlockLoc location) {
         Plot plot = this.getBasePlot(false);
-        if (location != null && new BlockLoc(0, 0, 0).equals(location)) {
+        if (BlockLoc.ZERO.equals(location) || BlockLoc.MINY.equals(location)) {
             return;
         }
         plot.getSettings().setPosition(location);
@@ -1506,12 +1506,18 @@ public class Plot {
     @Deprecated
     public Location getDefaultHomeSynchronous(final boolean member) {
         Plot plot = this.getBasePlot(false);
-        PlotLoc loc = member ? area.getDefaultHome() : area.getNonmemberHome();
+        BlockLoc loc = member ? area.defaultHome() : area.nonmemberHome();
         if (loc != null) {
             int x;
             int z;
             if (loc.getX() == Integer.MAX_VALUE && loc.getZ() == Integer.MAX_VALUE) {
                 // center
+                if (getArea() instanceof SinglePlotArea) {
+                    int y = loc.getY() == Integer.MIN_VALUE
+                            ? (isLoaded() ? this.worldUtil.getHighestBlockSynchronous(plot.getWorldName(), 0, 0) + 1 : 63)
+                            : loc.getY();
+                    return Location.at(plot.getWorldName(), 0, y, 0, 0, 0);
+                }
                 CuboidRegion largest = plot.getLargestRegion();
                 x = (largest.getMaximumPoint().getX() >> 1) - (largest.getMinimumPoint().getX() >> 1) + largest
                         .getMinimumPoint()
@@ -1525,10 +1531,14 @@ public class Plot {
                 x = bot.getX() + loc.getX();
                 z = bot.getZ() + loc.getZ();
             }
-            int y = loc.getY() < 1
+            int y = loc.getY() == Integer.MIN_VALUE
                     ? (isLoaded() ? this.worldUtil.getHighestBlockSynchronous(plot.getWorldName(), x, z) + 1 : 63)
                     : loc.getY();
-            return Location.at(plot.getWorldName(), x, y, z);
+            return Location.at(plot.getWorldName(), x, y, z, loc.getYaw(), loc.getPitch());
+        }
+        if (getArea() instanceof SinglePlotArea) {
+            int y = isLoaded() ? this.worldUtil.getHighestBlockSynchronous(plot.getWorldName(), 0, 0) + 1 : 63;
+            return Location.at(plot.getWorldName(), 0, y, 0, 0, 0);
         }
         // Side
         return plot.getSideSynchronous();
@@ -1540,31 +1550,36 @@ public class Plot {
             result.accept(Location.at(
                     "",
                     0,
-                    this.getArea() instanceof HybridPlotWorld ? ((HybridPlotWorld) this.getArea()).PLOT_HEIGHT + 1 : 4,
+                    this.getArea() instanceof ClassicPlotWorld ? ((ClassicPlotWorld) this.getArea()).PLOT_HEIGHT + 1 : 4,
                     0
             ));
             return;
         }
-        PlotLoc loc = member ? area.getDefaultHome() : area.getNonmemberHome();
+        BlockLoc loc = member ? area.defaultHome() : area.nonmemberHome();
         if (loc != null) {
             int x;
             int z;
             if (loc.getX() == Integer.MAX_VALUE && loc.getZ() == Integer.MAX_VALUE) {
                 // center
-                CuboidRegion largest = plot.getLargestRegion();
-                x = (largest.getMaximumPoint().getX() >> 1) - (largest.getMinimumPoint().getX() >> 1) + largest
-                        .getMinimumPoint()
-                        .getX();
-                z = (largest.getMaximumPoint().getZ() >> 1) - (largest.getMinimumPoint().getZ() >> 1) + largest
-                        .getMinimumPoint()
-                        .getZ();
+                if (getArea() instanceof SinglePlotArea) {
+                    x = 0;
+                    z = 0;
+                } else {
+                    CuboidRegion largest = plot.getLargestRegion();
+                    x = (largest.getMaximumPoint().getX() >> 1) - (largest.getMinimumPoint().getX() >> 1) + largest
+                            .getMinimumPoint()
+                            .getX();
+                    z = (largest.getMaximumPoint().getZ() >> 1) - (largest.getMinimumPoint().getZ() >> 1) + largest
+                            .getMinimumPoint()
+                            .getZ();
+                }
             } else {
                 // specific
                 Location bot = plot.getBottomAbs();
                 x = bot.getX() + loc.getX();
                 z = bot.getZ() + loc.getZ();
             }
-            if (loc.getY() < 1) {
+            if (loc.getY() == Integer.MIN_VALUE) {
                 if (isLoaded()) {
                     this.worldUtil.getHighestBlock(
                             plot.getWorldName(),
@@ -1573,14 +1588,19 @@ public class Plot {
                             y -> result.accept(Location.at(plot.getWorldName(), x, y + 1, z))
                     );
                 } else {
-                    result.accept(Location.at(plot.getWorldName(), x, 63, z));
+                    int y = this.getArea() instanceof ClassicPlotWorld ? ((ClassicPlotWorld) this.getArea()).PLOT_HEIGHT + 1 : 63;
+                    result.accept(Location.at(plot.getWorldName(), x, y, z, loc.getYaw(), loc.getPitch()));
                 }
             } else {
-                result.accept(Location.at(plot.getWorldName(), x, loc.getY(), z));
+                result.accept(Location.at(plot.getWorldName(), x, loc.getY(), z, loc.getYaw(), loc.getPitch()));
             }
             return;
         }
         // Side
+        if (getArea() instanceof SinglePlotArea) {
+            int y = isLoaded() ? this.worldUtil.getHighestBlockSynchronous(plot.getWorldName(), 0, 0) + 1 : 63;
+            result.accept(Location.at(plot.getWorldName(), 0, y, 0, 0, 0));
+        }
         plot.getSide(result);
     }
 
@@ -1707,9 +1727,14 @@ public class Plot {
         }
         this.getPlotModificationManager().setSign(player.getName());
         player.sendMessage(TranslatableCaption.of("working.claimed"), Template.of("plot", this.getId().toString()));
-        if (teleport && Settings.Teleport.ON_CLAIM) {
-            teleportPlayer(player, auto ? TeleportCause.COMMAND_AUTO : TeleportCause.COMMAND_CLAIM, result -> {
-            });
+        if (teleport) {
+            if (!auto && Settings.Teleport.ON_CLAIM) {
+                teleportPlayer(player, TeleportCause.COMMAND_CLAIM, result -> {
+                });
+            } else if (auto && Settings.Teleport.ON_AUTO) {
+                teleportPlayer(player, TeleportCause.COMMAND_AUTO, result -> {
+                });
+            }
         }
         PlotArea plotworld = getArea();
         if (plotworld.isSchematicOnClaim()) {
@@ -1727,16 +1752,25 @@ public class Plot {
                 e.printStackTrace();
                 return true;
             }
-            schematicHandler.paste(sch, this, 0, 1, 0, Settings.Schematics.PASTE_ON_TOP, player, new RunnableVal<>() {
-                @Override
-                public void run(Boolean value) {
-                    if (value) {
-                        player.sendMessage(TranslatableCaption.of("schematics.schematic_paste_success"));
-                    } else {
-                        player.sendMessage(TranslatableCaption.of("schematics.schematic_paste_failed"));
+            schematicHandler.paste(
+                    sch,
+                    this,
+                    0,
+                    getArea().getMinBuildHeight(),
+                    0,
+                    Settings.Schematics.PASTE_ON_TOP,
+                    player,
+                    new RunnableVal<>() {
+                        @Override
+                        public void run(Boolean value) {
+                            if (value) {
+                                player.sendMessage(TranslatableCaption.of("schematics.schematic_paste_success"));
+                            } else {
+                                player.sendMessage(TranslatableCaption.of("schematics.schematic_paste_failed"));
+                            }
+                        }
                     }
-                }
-            });
+            );
         }
         plotworld.getPlotManager().claimPlot(this, null);
         return true;
@@ -2148,8 +2182,9 @@ public class Plot {
     }
 
     /**
-     * Gets the set home location or 0,0,0 if no location is set<br>
+     * Gets the set home location or 0,Integer#MIN_VALUE,0 if no location is set<br>
      * - Does not take the default home location into account
+     * - PlotSquared will internally find the correct place to teleport to if y = Integer#MIN_VALUE when teleporting to the plot.
      *
      * @return home location
      */
@@ -2821,7 +2856,7 @@ public class Plot {
                         flags = MINI_MESSAGE.parse(TranslatableCaption.of("info.none").getComponent(player));
                     } else {
                         TextComponent.Builder flagBuilder = Component.text();
-                        String prefix = " ";
+                        String prefix = "";
                         for (final PlotFlag<?, ?> flag : flagCollection) {
                             Object value;
                             if (flag instanceof DoubleFlag && !Settings.General.SCIENTIFIC) {
@@ -2893,12 +2928,19 @@ public class Plot {
                     Template flagsTemplate = Template.of("flags", flags);
                     Template creationTemplate = Template.of("creationdate", newDate);
                     Template buildTemplate = Template.of("build", String.valueOf(build));
-                    if (iInfo.getComponent(player).contains("<rating>")) {
+                    Template sizeTemplate = Template.of("size", String.valueOf(getConnectedPlots().size()));
+                    String component = iInfo.getComponent(player);
+                    if (component.contains("<rating>") || component.contains("<likes>")) {
                         TaskManager.runTaskAsync(() -> {
                             Template ratingTemplate;
+                            Template likesTemplate;
                             if (Settings.Ratings.USE_LIKES) {
                                 ratingTemplate = Template.of(
                                         "rating",
+                                        String.format("%.0f%%", Like.getLikesPercentage(this) * 100D)
+                                );
+                                likesTemplate = Template.of(
+                                        "likes",
                                         String.format("%.0f%%", Like.getLikesPercentage(this) * 100D)
                                 );
                             } else {
@@ -2927,6 +2969,7 @@ public class Plot {
                                         );
                                     }
                                 }
+                                likesTemplate = Template.of("likes", "N/A");
                             }
                             future.complete(StaticCaption.of(MINI_MESSAGE.serialize(MINI_MESSAGE
                                     .parse(
@@ -2949,6 +2992,8 @@ public class Plot {
                                             buildTemplate,
                                             ratingTemplate,
                                             creationTemplate,
+                                            sizeTemplate,
+                                            likesTemplate,
                                             footerTemplate
                                     ))));
                         });
@@ -2973,6 +3018,8 @@ public class Plot {
                                     seenTemplate,
                                     flagsTemplate,
                                     buildTemplate,
+                                    creationTemplate,
+                                    sizeTemplate,
                                     footerTemplate
                             ))));
                 }

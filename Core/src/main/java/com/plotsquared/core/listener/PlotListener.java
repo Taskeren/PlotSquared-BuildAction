@@ -8,7 +8,7 @@
  *                                    | |
  *                                    |_|
  *            PlotSquared plot management system for Minecraft
- *                  Copyright (C) 2021 IntellectualSites
+ *               Copyright (C) 2014 - 2022 IntellectualSites
  *
  *     This program is free software: you can redistribute it and/or modify
  *     it under the terms of the GNU General Public License as published by
@@ -58,6 +58,7 @@ import com.plotsquared.core.plot.flag.implementations.MusicFlag;
 import com.plotsquared.core.plot.flag.implementations.NotifyEnterFlag;
 import com.plotsquared.core.plot.flag.implementations.NotifyLeaveFlag;
 import com.plotsquared.core.plot.flag.implementations.PlotTitleFlag;
+import com.plotsquared.core.plot.flag.implementations.ServerPlotFlag;
 import com.plotsquared.core.plot.flag.implementations.TimeFlag;
 import com.plotsquared.core.plot.flag.implementations.TitlesFlag;
 import com.plotsquared.core.plot.flag.implementations.WeatherFlag;
@@ -173,9 +174,21 @@ public class PlotListener {
             String greeting = plot.getFlag(GreetingFlag.class);
             if (!greeting.isEmpty()) {
                 if (!Settings.Chat.NOTIFICATION_AS_ACTIONBAR) {
-                    plot.format(StaticCaption.of(greeting), player, false).thenAcceptAsync(player::sendMessage);
+                    player.sendMessage(
+                            TranslatableCaption.of("flags.greeting_flag_format"),
+                            Template.of("world", plot.getWorldName()),
+                            Template.of("plot_id", plot.getId().toString()),
+                            Template.of("alias", plot.getAlias()),
+                            Template.of("greeting", greeting)
+                    );
                 } else {
-                    plot.format(StaticCaption.of(greeting), player, false).thenAcceptAsync(player::sendActionBar);
+                    player.sendActionBar(
+                            TranslatableCaption.of("flags.greeting_flag_format"),
+                            Template.of("world", plot.getWorldName()),
+                            Template.of("plot_id", plot.getId().toString()),
+                            Template.of("alias", plot.getAlias()),
+                            Template.of("greeting", greeting)
+                    );
                 }
             }
 
@@ -305,50 +318,52 @@ public class PlotListener {
                     subtitle = "";
                     fromFlag = false;
                 }
-                // It's not actually possible for these to be null, but IntelliJ is dumb
-                TaskManager.runTaskLaterAsync(() -> {
-                    Plot lastPlot;
-                    try (final MetaDataAccess<Plot> lastPlotAccess =
-                                 player.accessTemporaryMetaData(PlayerMetaDataKeys.TEMPORARY_LAST_PLOT)) {
-                        lastPlot = lastPlotAccess.get().orElse(null);
-                    }
-                    if ((lastPlot != null) && plot.getId().equals(lastPlot.getId()) && plot.hasOwner()) {
-                        final UUID plotOwner = plot.getOwnerAbs();
-                        String owner = PlayerManager.getName(plotOwner, false);
-                        Caption header = fromFlag ? StaticCaption.of(title) : TranslatableCaption.of("titles" +
-                                ".title_entered_plot");
-                        Caption subHeader = fromFlag ? StaticCaption.of(subtitle) : TranslatableCaption.of("titles" +
-                                ".title_entered_plot_sub");
-                        Template plotTemplate = Template.of("plot", lastPlot.getId().toString());
-                        Template worldTemplate = Template.of("world", player.getLocation().getWorldName());
-                        Template ownerTemplate = Template.of("owner", owner);
-
-                        final Consumer<String> userConsumer = user -> {
-                            if (Settings.Titles.TITLES_AS_ACTIONBAR) {
-                                player.sendActionBar(header, plotTemplate, worldTemplate, ownerTemplate);
-                            } else {
-                                player.sendTitle(header, subHeader, plotTemplate, worldTemplate, ownerTemplate);
-                            }
-                        };
-
-                        UUID uuid = plot.getOwner();
-                        if (uuid == null) {
-                            userConsumer.accept("Unknown");
-                        } else if (uuid.equals(DBFunc.SERVER)) {
-                            userConsumer.accept(MINI_MESSAGE.stripTokens(TranslatableCaption
-                                    .of("info.server")
-                                    .getComponent(player)));
-                        } else {
-                            PlotSquared.get().getImpromptuUUIDPipeline().getSingle(plot.getOwner(), (user, throwable) -> {
-                                if (throwable != null) {
-                                    userConsumer.accept("Unknown");
-                                } else {
-                                    userConsumer.accept(user);
-                                }
-                            });
+                if (fromFlag || !plot.getFlag(ServerPlotFlag.class) || Settings.Titles.DISPLAY_DEFAULT_ON_SERVER_PLOT) {
+                    TaskManager.runTaskLaterAsync(() -> {
+                        Plot lastPlot;
+                        try (final MetaDataAccess<Plot> lastPlotAccess =
+                                     player.accessTemporaryMetaData(PlayerMetaDataKeys.TEMPORARY_LAST_PLOT)) {
+                            lastPlot = lastPlotAccess.get().orElse(null);
                         }
-                    }
-                }, TaskTime.seconds(1L));
+                        if ((lastPlot != null) && plot.getId().equals(lastPlot.getId()) && plot.hasOwner()) {
+                            final UUID plotOwner = plot.getOwnerAbs();
+                            String owner = PlayerManager.getName(plotOwner, false);
+                            Caption header = fromFlag ? StaticCaption.of(title) : TranslatableCaption.of("titles" +
+                                    ".title_entered_plot");
+                            Caption subHeader = fromFlag ? StaticCaption.of(subtitle) : TranslatableCaption.of("titles" +
+                                    ".title_entered_plot_sub");
+                            Template plotTemplate = Template.of("plot", lastPlot.getId().toString());
+                            Template worldTemplate = Template.of("world", player.getLocation().getWorldName());
+                            Template ownerTemplate = Template.of("owner", owner);
+                            Template aliasTemplate = Template.of("alias", plot.getAlias());
+
+                            final Consumer<String> userConsumer = user -> {
+                                if (Settings.Titles.TITLES_AS_ACTIONBAR) {
+                                    player.sendActionBar(header, aliasTemplate, plotTemplate, worldTemplate, ownerTemplate);
+                                } else {
+                                    player.sendTitle(header, subHeader, aliasTemplate, plotTemplate, worldTemplate, ownerTemplate);
+                                }
+                            };
+
+                            UUID uuid = plot.getOwner();
+                            if (uuid == null) {
+                                userConsumer.accept("Unknown");
+                            } else if (uuid.equals(DBFunc.SERVER)) {
+                                userConsumer.accept(MINI_MESSAGE.stripTokens(TranslatableCaption
+                                        .of("info.server")
+                                        .getComponent(player)));
+                            } else {
+                                PlotSquared.get().getImpromptuUUIDPipeline().getSingle(plot.getOwner(), (user, throwable) -> {
+                                    if (throwable != null) {
+                                        userConsumer.accept("Unknown");
+                                    } else {
+                                        userConsumer.accept(user);
+                                    }
+                                });
+                            }
+                        }
+                    }, TaskTime.seconds(1L));
+                }
             }
 
             TimedFlag.Timed<Integer> feed = plot.getFlag(FeedFlag.class);
@@ -404,9 +419,21 @@ public class PlotListener {
                 String farewell = plot.getFlag(FarewellFlag.class);
                 if (!farewell.isEmpty()) {
                     if (!Settings.Chat.NOTIFICATION_AS_ACTIONBAR) {
-                        plot.format(StaticCaption.of(farewell), player, false).thenAcceptAsync(player::sendMessage);
+                        player.sendMessage(
+                                TranslatableCaption.of("flags.farewell_flag_format"),
+                                Template.of("world", plot.getWorldName()),
+                                Template.of("plot_id", plot.getId().toString()),
+                                Template.of("alias", plot.getAlias()),
+                                Template.of("farewell", farewell)
+                        );
                     } else {
-                        plot.format(StaticCaption.of(farewell), player, false).thenAcceptAsync(player::sendActionBar);
+                        player.sendActionBar(
+                                TranslatableCaption.of("flags.farewell_flag_format"),
+                                Template.of("world", plot.getWorldName()),
+                                Template.of("plot_id", plot.getId().toString()),
+                                Template.of("alias", plot.getAlias()),
+                                Template.of("farewell", farewell)
+                        );
                     }
                 }
 
