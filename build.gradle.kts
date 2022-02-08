@@ -18,7 +18,7 @@ plugins {
     idea
 }
 
-version = "6.2.3-SNAPSHOT"
+version = "6.4.1-SNAPSHOT"
 
 allprojects {
     group = "com.plotsquared"
@@ -40,11 +40,6 @@ allprojects {
         maven {
             name = "Jitpack"
             url = uri("https://jitpack.io")
-        }
-
-        maven {
-            name = "IntellectualSites"
-            url = uri("https://mvn.intellectualsites.com/content/groups/public/")
         }
 
         maven {
@@ -82,7 +77,7 @@ allprojects {
     }
 
     tasks.compileJava.configure {
-        options.release.set(16)
+        options.release.set(17)
     }
 
     configurations.all {

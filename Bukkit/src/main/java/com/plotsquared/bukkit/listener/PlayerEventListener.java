@@ -68,11 +68,9 @@ import com.plotsquared.core.plot.flag.implementations.PlayerInteractFlag;
 import com.plotsquared.core.plot.flag.implementations.PreventCreativeCopyFlag;
 import com.plotsquared.core.plot.flag.implementations.TamedInteractFlag;
 import com.plotsquared.core.plot.flag.implementations.UntrustedVisitFlag;
-import com.plotsquared.core.plot.flag.implementations.UseFlag;
 import com.plotsquared.core.plot.flag.implementations.VehicleBreakFlag;
 import com.plotsquared.core.plot.flag.implementations.VehicleUseFlag;
 import com.plotsquared.core.plot.flag.implementations.VillagerInteractFlag;
-import com.plotsquared.core.plot.flag.types.BlockTypeWrapper;
 import com.plotsquared.core.plot.world.PlotAreaManager;
 import com.plotsquared.core.util.EventDispatcher;
 import com.plotsquared.core.util.MathMan;
@@ -94,6 +92,7 @@ import org.bukkit.FluidCollisionMode;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.block.BlockState;
 import org.bukkit.block.data.Waterlogged;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.entity.ArmorStand;
@@ -224,6 +223,7 @@ public class PlayerEventListener extends PlotListener implements Listener {
         }
     }
 
+    @SuppressWarnings("StringSplitter")
     @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGHEST)
     public void playerCommand(PlayerCommandPreprocessEvent event) {
         String msg = event.getMessage().toLowerCase().replaceAll("/", "").trim();
@@ -379,6 +379,7 @@ public class PlayerEventListener extends PlotListener implements Listener {
         this.eventDispatcher.doRespawnTask(pp);
     }
 
+    @SuppressWarnings("deprecation") // We explicitly want #getHomeSynchronous here
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onTeleport(PlayerTeleportEvent event) {
         Player player = event.getPlayer();
@@ -571,7 +572,7 @@ public class PlayerEventListener extends PlotListener implements Listener {
                     player.teleport(event.getTo());
                     this.tmpTeleport = true;
                     pp.sendMessage(TranslatableCaption.of("border.denied"));
-                } else {
+                } else if (MathMan.roundInt(from.getX()) <= border) { // Only send if they just moved out of the border
                     pp.sendMessage(TranslatableCaption.of("border.bypass.exited"));
                 }
             } else if (x2 < -border && this.tmpTeleport) {
@@ -581,7 +582,7 @@ public class PlayerEventListener extends PlotListener implements Listener {
                     player.teleport(event.getTo());
                     this.tmpTeleport = true;
                     pp.sendMessage(TranslatableCaption.of("border.denied"));
-                } else {
+                } else if (MathMan.roundInt(from.getX()) >= -border) { // Only send if they just moved out of the border
                     pp.sendMessage(TranslatableCaption.of("border.bypass.exited"));
                 }
             } else if (((x1 = MathMan.roundInt(from.getX())) >= border && x2 <= border) || (x1 <= -border && x2 >= -border)) {
@@ -662,7 +663,7 @@ public class PlayerEventListener extends PlotListener implements Listener {
                     player.teleport(event.getTo());
                     this.tmpTeleport = true;
                     pp.sendMessage(TranslatableCaption.of("border.denied"));
-                } else {
+                } else if (MathMan.roundInt(from.getZ()) <= border) { // Only send if they just moved out of the border
                     pp.sendMessage(TranslatableCaption.of("border.bypass.exited"));
                 }
             } else if (z2 < -border && this.tmpTeleport) {
@@ -672,7 +673,7 @@ public class PlayerEventListener extends PlotListener implements Listener {
                     player.teleport(event.getTo());
                     this.tmpTeleport = true;
                     pp.sendMessage(TranslatableCaption.of("border.denied"));
-                } else {
+                } else if (MathMan.roundInt(from.getZ()) >= -border) { // Only send if they just moved out of the border
                     pp.sendMessage(TranslatableCaption.of("border.bypass.exited"));
                 }
             } else if (((z1 = MathMan.roundInt(from.getZ())) >= border && z2 <= border) || (z1 <= -border && z2 >= -border)) {
@@ -1063,9 +1064,13 @@ public class PlayerEventListener extends PlotListener implements Listener {
         if (area == null) {
             return;
         }
-        PlayerBlockEventType eventType = null;
+        PlayerBlockEventType eventType;
         BlockType blocktype1;
         Block block = event.getClickedBlock();
+        if (block == null) {
+            // We do not care in this case, the player is likely interacting with air ("nothing").
+            return;
+        }
         Location location = BukkitUtil.adapt(block.getLocation());
         Action action = event.getAction();
         switch (action) {
@@ -1667,6 +1672,7 @@ public class PlayerEventListener extends PlotListener implements Listener {
         }
     }
 
+    @SuppressWarnings("deprecation") // #getLocate is needed for Spigot compatibility
     @EventHandler
     public void onLocaleChange(final PlayerLocaleChangeEvent event) {
         // The event is fired before the player is deemed online upon login
@@ -1702,22 +1708,49 @@ public class PlayerEventListener extends PlotListener implements Listener {
 
     @EventHandler
     public void onPortalCreation(PortalCreateEvent event) {
-        Location location = BukkitUtil.adapt(event.getEntity().getLocation());
-        PlotArea area = location.getPlotArea();
-        if (area == null) {
+        String world = event.getWorld().getName();
+        if (PlotSquared.get().getPlotAreaManager().getPlotAreasSet(world).size() == 0) {
             return;
         }
-        Plot plot = location.getOwnedPlot();
-        if (plot == null) {
-            if (area.isRoadFlags() && area.getRoadFlag(DenyPortalsFlag.class)) {
-                event.setCancelled(true);
+        int minX = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int minZ = Integer.MAX_VALUE;
+        int maxZ = Integer.MIN_VALUE;
+        for (BlockState state : event.getBlocks()) {
+            minX = Math.min(state.getX(), minX);
+            maxX = Math.max(state.getX(), maxX);
+            minZ = Math.min(state.getZ(), minZ);
+            maxZ = Math.max(state.getZ(), maxZ);
+        }
+        int y = event.getBlocks().get(0).getY(); // Don't need to worry about this too much
+        for (Location location : Set.of( // Use Set to lazily avoid duplicate locations
+                Location.at(world, minX, y, maxX),
+                Location.at(world, minZ, y, maxZ),
+                Location.at(world, minX, y, maxZ),
+                Location.at(world, minZ, y, maxX)
+        )) {
+            PlotArea area = location.getPlotArea();
+            if (area == null) {
+                continue;
             }
-            return;
-        }
-        if (plot.getFlag(DenyPortalsFlag.class)) {
+            Plot plot = location.getOwnedPlot();
+            if (plot == null) {
+                if (area.isRoadFlags() && area.getRoadFlag(DenyPortalsFlag.class)) {
+                    event.setCancelled(true);
+                    return;
+                }
+                continue;
+            }
             if (plot.getFlag(DenyPortalsFlag.class)) {
-                plot.debug(event.getEntity().getName() + " did not create a portal because of deny-portals = true");
+                StringBuilder builder = new StringBuilder();
+                if (event.getEntity() != null) {
+                    builder.append(event.getEntity().getName()).append(" did not create a portal");
+                } else {
+                    builder.append("Portal creation cancelled");
+                }
+                plot.debug(builder.append(" because of deny-portals = true").toString());
                 event.setCancelled(true);
+                return;
             }
         }
     }
